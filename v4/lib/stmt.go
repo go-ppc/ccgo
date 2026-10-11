@@ -34,12 +34,9 @@ func (c *ctx) statement(w writer, n *cc.Statement) {
 			break
 		}
 
-		switch {
-		case c.exprStmtLevel != 0:
-			w.w("%s;", c.topExpr(w, e, nil, exprVoid))
-		default:
-			w.w("%s;", c.discardStr2(e, c.topExpr(w, e, nil, exprVoid)))
-		}
+		// Inside a statement expression too: `({ a; 1; })` must not
+		// become the Go statement `a;`.
+		w.w("%s;", c.discardStr2(e, c.topExpr(w, e, nil, exprVoid)))
 	case cc.StatementSelection: // SelectionStatement
 		w.w("%s%s", sep, c.posComment(n))
 		c.selectionStatement(w, n.SelectionStatement)

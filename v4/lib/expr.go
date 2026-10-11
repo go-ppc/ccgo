@@ -4785,7 +4785,12 @@ out:
 			rt, rmode = n.Type(), exprDefault
 			v := c.f.newAutovarType(n, n.Type())
 			c.compoundStatement(w, n.CompoundStatement, false, v)
-			if c.exprStmtLevel == 1 {
+			// A nested statement expression whose value is discarded, in
+			// particular one that is the last statement of the enclosing
+			// one, yields nothing: compoundStatement takes the value from
+			// compoundStmtValue. Any other use of the value, an operand,
+			// an initializer, an argument, a condition, needs v.
+			if c.exprStmtLevel == 1 || mode != exprVoid {
 				b.w("%s", v)
 			}
 			// A statement-expression performs no volatile/atomic memory

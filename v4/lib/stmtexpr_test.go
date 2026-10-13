@@ -29,12 +29,14 @@ func TestNestedStatementExpressions(t *testing.T) {
 #define LOAD(p) ({ __auto_type __atomic_load_ptr = (p); __typeof__((void)0, *__atomic_load_ptr) __atomic_load_tmp; __atomic_load(__atomic_load_ptr, &__atomic_load_tmp, __ATOMIC_SEQ_CST); __atomic_load_tmp; })
 #define STORE(p, v) ({ __auto_type __atomic_store_ptr = (p); __typeof__((void)0, *__atomic_store_ptr) __atomic_store_tmp = (v); __atomic_store(__atomic_store_ptr, &__atomic_store_tmp, __ATOMIC_SEQ_CST); })
 
-struct s { unsigned long long pos; unsigned seg; unsigned long long end; };
+// The 64-bit members come first: on 386 a long long member is only 4-aligned,
+// and the 64-bit atomics of libc panic on an address that is not 8-aligned.
+struct s { unsigned long long pos, end; unsigned seg; };
 
 static int g(int x) { return x + 100; }
 
 int main(void) {
-	struct s s = { 0, 3, 5 };
+	struct s s = { 0, 5, 3 };
 	int a = 3, b = 4, arr[] = { 7, 8, 9 };
 
 	STORE(&s.pos, ((unsigned long long)LOAD(&s.seg) << 40) | LOAD(&s.end));

@@ -1096,8 +1096,19 @@ func (c *ctx) declaration(w writer, n *cc.Declaration, external bool) {
 				break
 			}
 
+			// A tag declaration declares no object, so like a typedef, see
+			// defineType0, it skips a type that is not valid instead of
+			// reporting it. Every program including <windows.h> for
+			// windows/amd64 declares struct _CONTEXT, aligned to 16, in
+			// excpt.h. An object of such a type is reported where it is
+			// declared.
+			t := n.DeclarationSpecifiers.Type()
+			if !c.isValidType1(n, t, false) {
+				break
+			}
+
 			sep := sep(n)
-			switch x := n.DeclarationSpecifiers.Type().(type) {
+			switch x := t.(type) {
 			case *cc.EnumType:
 				c.defineEnumType(w, sep, n, x)
 			case *cc.StructType:

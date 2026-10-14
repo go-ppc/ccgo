@@ -39,7 +39,14 @@ func testHostCCvsCcgoFiles(t *testing.T, files map[string]string) string {
 	cFile := filepath.Join(dir, "test.c")
 
 	bin := filepath.Join(dir, enforceBinaryExt("cbin"))
-	if out, err := exec.Command(hostCC, "-o", bin, "-w", cFile, "-lm", "-lpthread").CombinedOutput(); err != nil {
+	args := []string{"-o", bin, "-w", cFile, "-lm", "-lpthread"}
+	out, err := exec.Command(hostCC, args...).CombinedOutput()
+	if err != nil && bytes.Contains(out, []byte("__atomic_")) {
+		// gcc on 32-bit ARM implements 64-bit atomics in libatomic, which it
+		// does not link by default.
+		out, err = exec.Command(hostCC, append(args, "-latomic")...).CombinedOutput()
+	}
+	if err != nil {
 		t.Fatalf("%s: %v\n%s", hostCC, err, out)
 	}
 

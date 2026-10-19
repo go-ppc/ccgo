@@ -1,6 +1,9 @@
 # Handoff: replace the `__ccgo_up` vet bypass with `unsafe.Add(nil, x)` (#45)
 
-Status: **OPEN**. Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs
+Status: **RESOLVED** after `v4.37.0`, not yet released. See "Resolution" at
+the end for what was changed and verified.
+
+Measured 2026-10-19 on ccgo v4.37.0 output (modernc.org/libquickjs
 master 776071a, QuickJS 2026-06-04), Go 1.27.2. Coordinated between the
 libquickjs and quickjs sessions; trigger was the liustack/quickjs fork, commit
 [ec65a63](https://github.com/liustack/quickjs/commit/ec65a639c03d560048b4424085dd5230aa53411a),
@@ -278,3 +281,52 @@ The fork post-processes these too (`internal/fixlib/alloca.go`, `frames.go`,
   (a stack may not grow past 1 GB, so 512 MiB in practice) is reached at about
   40000 slots on arm64. With form C, 10000 slots would take about 17 MiB on
   arm64, so landing this handoff makes about 10000 (V8's ballpark) affordable.
+
+## Resolution (2026-10-19)
+
+Plan steps 1-3 are done, step 4 is not.
+
+- `etc.go`: `unsafeFromUintptr(arg)` renders `unsafe.Add(nil, arg)` through
+  `unsafe()`, so the `importQualifier`/`preserve` tags are kept.
+- The seven emit sites (`expr.go` cast/deref, two in `postfixExpressionIndex`,
+  the compound assignment, two pinned-local reads; `decl.go` pinned-local
+  initializer) now emit `*(*T)(unsafe.Add(nil, x))` with the same operands.
+- `link.go`: the `__ccgo_up` definition is no longer written unconditionally.
+  The linker writes it only when an object file references it, the same way
+  `needFpFunc` handles `__ccgo_fp`. New output never contains it, but a
+  `.o.go` from v4.34.1-v4.37.0 (same `objectFileSemver` v2) still links
+  instead of failing with `undefined: __ccgo_up`. `ccgoUP` stays for that
+  check only. No hand-written code under `~/src/modernc.org` references
+  `__ccgo_up` (2,027 files do, all ccgo output or ccgo itself).
+- `../README.md`: the memory ABI section now says that `-race` panics come
+  from checkptr (not ThreadSanitizer), and a new subsection covers `go vet`
+  findings in transpiled code (the points of "What users need to be told").
+
+Verified on linux/amd64:
+
+- `make test` passes (0 fails in every corpus). The golden drift it printed
+  is the known host-gcc-14 noise (three `mir/c-tests/lacc` files) and was
+  reverted.
+- A small C test that hits every changed site matches gcc, also under
+  `-race`, and is clean under `go vet -unsafeptr`. An object file produced
+  by the v4.37.0 ccgo links with the new linker and runs.
+- libquickjs regenerated with this ccgo (scratch clone, `go.work`, linux/amd64)
+  is identical to the mechanical `unup -add` rewrite of the committed file,
+  except for one line: a redundant `int64(...)` around an `int64_t` pinned
+  local in `quickjs-libc.c`'s `js_printf_internal` is now dropped. The
+  linker's conversion pruning (`link.go`, `*gc.Conversion`) can type the
+  operand through `unsafe.Add` but could not through `__ccgo_up`.
+  `_JS_CallInternal` frame 928 (was 2568), `_resolve_labels` 928,
+  `_next_token` 152. `go vet -unsafeptr` count is 21,732 with both the old
+  and the new output at libquickjs c79c3f9. All tests except Test262 pass,
+  also with `-race`, and a `BenchmarkMicro` pass completes.
+
+Not done here:
+
+- Step 4 (route the remaining `unsafe.Pointer(<uintptr>)` emitters through
+  `unsafeFromUintptr` until `-xvet` passes).
+- `-xvet`/csmith on the builders and the darwin/arm64 benchmark. They were not
+  rerun: the regenerated output is the measured form C.
+- The "Related ccgo/libc costs" items 1 and 2 remain open.
+- libquickjs (and the rest of the fleet) picks this up on the next ccgo
+  release and regeneration.

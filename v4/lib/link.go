@@ -603,6 +603,7 @@ type linker struct {
 	closed      bool
 	keepStrings bool
 	needFpFunc  bool
+	needUpFunc  bool
 }
 
 func newLinker(task *Task, libc *object) (*linker, error) {
@@ -1711,12 +1712,14 @@ func %s(f interface{}) uintptr {
 
 `, ccgoFP)
 	}
-	l.w(`
+	if l.needUpFunc {
+		l.w(`
 
 func %s(n uintptr) unsafe.Pointer {
 	return unsafe.Pointer(&n)
 }
 `, ccgoUP)
+	}
 	var a []string
 	for k := range l.externVars {
 		a = append(a, k)
@@ -1894,8 +1897,11 @@ func (l *linker) print0(w writer, fi *fnInfo, n interface{}) {
 		switch x.Ch {
 		case gc.IDENTIFIER:
 			id := x.Src()
-			if id == tag(preserve)+ccgoFP {
+			switch id {
+			case tag(preserve) + ccgoFP:
 				l.needFpFunc = true
+			case tag(preserve) + ccgoUP:
+				l.needUpFunc = true
 			}
 			nm := fi.name(id)
 			if nm == "" {

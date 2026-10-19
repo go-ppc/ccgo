@@ -14,7 +14,7 @@ Command ccgo/v4 is a C compiler producing Go code.
 
 You must never convert a Go pointer (e.g., pointing to a Go slice, string, or struct) into a `uintptr` and pass it to a `ccgo`-generated function. 
 
-Go's Garbage Collector is unaware of C-style pointer math. If the GC runs while the transpiled code is executing, it may move the Go memory, leaving the `uintptr` pointing to invalid memory. Furthermore, passing Go pointers to transpiled C code will frequently cause `go test -race` to panic, as the race detector's ThreadSanitizer does not recognize the memory access patterns of the transpiled code on Go-managed memory.
+Go's Garbage Collector is unaware of C-style pointer math. If the GC runs while the transpiled code is executing, it may move the Go memory, leaving the `uintptr` pointing to invalid memory. Furthermore, passing Go pointers to transpiled C code will frequently cause `go test -race` to panic: `-race` (and `-msan`, `-asan`) enables checkptr, which rejects a pointer computed from a `uintptr` when it points into Go-managed memory (`checkptr: pointer arithmetic result points to invalid allocation`). That makes `go test -race` the way to find violations of this rule.
 
 ### The Correct Approach: `libc.Xmalloc`
 
@@ -49,3 +49,11 @@ transpiled_c_function(tls, cPtr)
 // 4. Copy Out
 copy(myGoData, cSlice)
 ```
+
+### `go vet` findings in transpiled code
+
+Transpiled code converts `uintptr` C pointers to `unsafe.Pointer`, which the `unsafeptr` analyzer of `go vet` reports as "possible misuse of unsafe.Pointer". In `ccgo` output these are false positives: C pointers point into memory the Go GC does not manage (the libc heap, the TLS stack, pointer-free Go globals), so nothing can move or free it behind a `uintptr`. That holds only as long as the rule above is followed.
+
+- `go test` never runs `unsafeptr`, its vet subset does not include it (see `go help test`).
+- `go vet ./...` vets only the packages of the current module, never its dependencies. Only a module that contains `ccgo` output itself sees the findings. Use `go vet -unsafeptr=false ./...` there and expect `unreachable code` findings as well.
+- gopls shows the same diagnostics in an editor. They are cosmetic.

@@ -984,6 +984,10 @@ func unsafe(fn string, arg interface{}) string {
 
 func unsafePointer(arg interface{}) string { return unsafe("Pointer", arg) }
 
+// unsafeFromUintptr converts the uintptr arg to unsafe.Pointer without
+// triggering go vet -unsafeptr and at no run time cost, see #45.
+func unsafeFromUintptr(arg interface{}) string { return unsafe("Add", fmt.Sprintf("nil, %s", arg)) }
+
 func unsafeAddr(arg interface{}) string {
 	return fmt.Sprintf("%sunsafe.%sPointer(&(%s))", tag(importQualifier), tag(preserve), arg)
 }

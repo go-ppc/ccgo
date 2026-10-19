@@ -46,7 +46,8 @@ const (
 	// enforced. Poor man's type annotation.
 	ccgoFuncParam = "__ccgo_fp_"
 	ccgoTS        = "__ccgo_ts"
-	// unsafe.Pointer
+	// Returns unsafe.Pointer. No longer emitted, the linker defines it only for
+	// object files of older ccgo versions that use it.
 	ccgoUP = "__ccgo_up"
 )
 
@@ -1761,7 +1762,7 @@ out:
 		switch mode {
 		case exprDefault, exprLvalue, exprVoid:
 			rt, rmode = n.Type(), mode
-			b.w("(**(**%s)(%s%s(%s)))", c.typ(n, n.CastExpression.Type().(*cc.PointerType).Elem()), tag(preserve), ccgoUP, c.expr(w, n.CastExpression, nil, exprDefault))
+			b.w("(*(*%s)(%s))", c.typ(n, n.CastExpression.Type().(*cc.PointerType).Elem()), unsafeFromUintptr(c.expr(w, n.CastExpression, nil, exprDefault)))
 		case exprSelect:
 			rt, rmode = n.Type(), mode
 			b.w("((*%s)(%s))", c.typ(n, n.CastExpression.Type().(*cc.PointerType).Elem()), unsafePointer(c.expr(w, n.CastExpression, nil, exprDefault)))
@@ -2029,9 +2030,9 @@ func (c *ctx) postfixExpressionIndex(w writer, n, p, index cc.ExpressionNode, pt
 				}
 			}
 
-			b.w("(**(**%s)(%s%s(%s%s)))", c.typ(p, elem), tag(preserve), ccgoUP, c.expr(w, p, nil, exprDefault), c.indexOff(w, index, mul))
+			b.w("(*(*%s)(%s))", c.typ(p, elem), unsafeFromUintptr(fmt.Sprintf("%s%s", c.expr(w, p, nil, exprDefault), c.indexOff(w, index, mul))))
 		case *cc.PointerType:
-			b.w("(**(**%s)(%s%s(%s%s)))", c.typ(p, elem), tag(preserve), ccgoUP, c.expr(w, p, nil, exprDefault), c.indexOff(w, index, mul))
+			b.w("(*(*%s)(%s))", c.typ(p, elem), unsafeFromUintptr(fmt.Sprintf("%s%s", c.expr(w, p, nil, exprDefault), c.indexOff(w, index, mul))))
 		default:
 			// trc("%v: %s[%s] %v %T", c.pos(p), cc.NodeSource(p), cc.NodeSource(index), mode, x)
 			c.err(errorf("TODO %T", x))
@@ -4445,7 +4446,7 @@ func (c *ctx) assignmentExpression(w writer, n *cc.AssignmentExpression, t cc.Ty
 						case ok && x.Case == cc.PostfixExpressionSelect:
 							w.w("\n%s %s= %s%s", c.expr(w, n.UnaryExpression, n.UnaryExpression.Type(), exprDefault), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 						default:
-							w.w("\n(**(**%s)(%s%s(%s))) %s= %s%s;", c.typ(n, ut), tag(preserve), ccgoUP, c.topExpr(w, n.UnaryExpression, ut.Pointer(), exprUintptr), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
+							w.w("\n(*(*%s)(%s)) %s= %s%s;", c.typ(n, ut), unsafeFromUintptr(c.topExpr(w, n.UnaryExpression, ut.Pointer(), exprUintptr)), op, c.topExpr(w, n.AssignmentExpression, ct, exprDefault), k)
 						}
 					}
 				default:
@@ -4596,7 +4597,7 @@ out:
 			case info != nil && info.pinned():
 				switch mode {
 				case exprLvalue, exprSelect, exprIndex:
-					b.w("(**(**%s)(%s%s(%s)))", c.typ(n, x.Type()), tag(preserve), ccgoUP, bpOff(info.bpOff))
+					b.w("(*(*%s)(%s))", c.typ(n, x.Type()), unsafeFromUintptr(bpOff(info.bpOff)))
 				case exprUintptr:
 					rt = x.Type().Pointer()
 					b.w("%s", bpOff(info.bpOff))
@@ -4606,7 +4607,7 @@ out:
 					case ok && !x.IsParam():
 						b.w("%s", bpOff(info.bpOff))
 					default:
-						b.w("(**(**%s)(%s%s(%s)))", c.typ(n, x.Type()), tag(preserve), ccgoUP, bpOff(info.bpOff))
+						b.w("(*(*%s)(%s))", c.typ(n, x.Type()), unsafeFromUintptr(bpOff(info.bpOff)))
 					}
 				case exprCall:
 					switch y := x.Type().Undecay().(type) {

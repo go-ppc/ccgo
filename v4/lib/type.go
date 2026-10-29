@@ -249,7 +249,19 @@ func (c *ctx) typ0(b *strings.Builder, n cc.Node, t cc.Type, useTypenames, useTa
 						b.WriteByte('\n')
 						fmt.Fprintf(b, "%s__ccgo_align%d [%d]byte", tag(field), i, f.Offset()-off0)
 						off += int64(f.Offset() - off)
-					case cAlign > goAlign && off%int64(cAlign) != 0:
+					case cAlign > goAlign && off%int64(cAlign) != 0 && off+int64(cAlign-goAlign) == f.Offset():
+						// sqlite-gen-20261029 (darwin/ppc32): gate the pad on
+						// landing exactly at cc's recorded field offset. The
+						// old heuristic fired on the alignment inequality
+						// alone; the first target whose C Align (8 for
+						// long long/double) exceeds the Go FieldAlign (4) ---
+						// Leopard packs 8-byte scalars at field-align 4 ---
+						// exposed recorded offsets that already sit at 4, and
+						// padding to the cAlign boundary corrupted the layout
+						// (a [-1]byte pad farther on). Where cc's offset
+						// really is the next cAlign boundary this changes
+						// nothing; on targets where cAlign == goAlign the
+						// case is dead code, exactly as before.
 						b.WriteByte('\n')
 						fmt.Fprintf(b, "%s__ccgo_align%d [%d]byte", tag(field), i, cAlign-goAlign)
 						off += int64(cAlign - goAlign)

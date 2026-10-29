@@ -651,7 +651,7 @@ func newLinker(task *Task, libc *object) (*linker, error) {
 	}
 	maxUintptr := uint64(math.MaxUint64)
 	switch task.goarch {
-	case "386", "arm":
+	case "386", "arm", "ppc":
 		maxUintptr = math.MaxUint32
 	}
 	return &linker{

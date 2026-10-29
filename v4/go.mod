@@ -36,3 +36,5 @@ require (
 	modernc.org/sortutil v1.2.1 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
+
+replace modernc.org/cc/v4 => /home/shinichi/goppc/worktrees/cc-v4/v4

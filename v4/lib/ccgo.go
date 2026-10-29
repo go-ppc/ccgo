@@ -512,12 +512,12 @@ func (t *Task) main() (err error) {
 	}
 
 	switch t.goarch {
-	case "arm", "386":
+	case "arm", "386", "ppc":
 		// modernc.org/libc@v1/sys/types/Off_t is 64 bit
 		t.D = append(t.D, "-D_FILE_OFFSET_BITS=64")
 	}
 	switch t.goarch {
-	case "arm", "386":
+	case "arm", "386", "ppc":
 		t.intSize = 4
 	default:
 		t.intSize = 8

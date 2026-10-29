@@ -289,7 +289,7 @@ type ctx struct {
 func newCtx(task *Task, eh errHandler) *ctx {
 	maxAlign := 8
 	switch task.goarch {
-	case "arm", "386":
+	case "arm", "386", "ppc":
 		maxAlign = 4
 	}
 	return &ctx{
